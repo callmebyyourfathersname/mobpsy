@@ -7,15 +7,15 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 
 // Screens
-import SplashScreen       from './src/screens/SplashScreen';
-import RoleSelectScreen   from './src/screens/RoleSelectScreen';
-import ProfileSelectScreen from './src/screens/ProfileSelectScreen';
-import TeacherPinScreen   from './src/screens/TeacherPinScreen';
-import DashboardScreen    from './src/screens/DashboardScreen';
-import ScanScreen         from './src/screens/ScanScreen';
+import SplashScreen         from './src/screens/SplashScreen';
+import RoleSelectScreen     from './src/screens/RoleSelectScreen';
+import StudentLoginScreen   from './src/screens/StudentLoginScreen';
+import ParentLoginScreen    from './src/screens/ParentLoginScreen';
+import DashboardScreen      from './src/screens/DashboardScreen';
+import ScanScreen           from './src/screens/ScanScreen';
 import IdentificationScreen from './src/screens/IdentificationScreen';
-import SpellingScreen     from './src/screens/SpellingScreen';
-import GalleryScreen      from './src/screens/GalleryScreen';
+import SpellingScreen       from './src/screens/SpellingScreen';
+import GalleryScreen        from './src/screens/GalleryScreen';
 
 // Store
 import { useProfileStore, useProgressStore } from './src/store/store';
@@ -26,8 +26,7 @@ import { Colors } from './src/theme/colors';
 const Stack = createStackNavigator();
 const Tab   = createBottomTabNavigator();
 
-/** Bottom tab navigator used after login */
-function StudentTabs({ navigation }) {
+function StudentTabs() {
   return (
     <Tab.Navigator
       screenOptions={{
@@ -73,17 +72,14 @@ function StudentTabs({ navigation }) {
   );
 }
 
-/** Root stack — handles auth flow + student screens */
 export default function App() {
-  const loadProfiles    = useProfileStore(s => s.loadProfiles);
-  const activeProfile   = useProfileStore(s => s.activeProfile);
-  const loadProgress    = useProgressStore(s => s.loadProgress);
-  const startSession    = useProgressStore(s => s.startSession);
+  const loadProfiles  = useProfileStore(s => s.loadProfiles);
+  const activeProfile = useProfileStore(s => s.activeProfile);
+  const loadProgress  = useProgressStore(s => s.loadProgress);
+  const startSession  = useProgressStore(s => s.startSession);
 
-  // Load persisted profiles on mount
   useEffect(() => { loadProfiles(); }, []);
 
-  // When active profile changes, load their progress
   useEffect(() => {
     if (activeProfile) {
       loadProgress(activeProfile.id).then(() => startSession());
@@ -94,16 +90,11 @@ export default function App() {
     <NavigationContainer>
       <StatusBar style="dark" />
       <Stack.Navigator screenOptions={{ headerShown: false, animationEnabled: true }}>
-        {/* Auth flow */}
-        <Stack.Screen name="Splash"         component={SplashScreen} />
-        <Stack.Screen name="RoleSelect"     component={RoleSelectScreen} />
-        <Stack.Screen name="ProfileSelect"  component={ProfileSelectScreen} />
-        <Stack.Screen name="TeacherPin"     component={TeacherPinScreen} />
-
-        {/* Student area — bottom tabs as root */}
-        <Stack.Screen name="StudentArea"    component={StudentTabs} />
-
-        {/* Modal-style game screens pushed on top of tabs */}
+        <Stack.Screen name="Splash"       component={SplashScreen} />
+        <Stack.Screen name="RoleSelect"   component={RoleSelectScreen} />
+        <Stack.Screen name="StudentLogin" component={StudentLoginScreen} />
+        <Stack.Screen name="ParentLogin"  component={ParentLoginScreen} />
+        <Stack.Screen name="StudentArea"  component={StudentTabs} />
         <Stack.Screen
           name="Identification"
           component={IdentificationScreen}
