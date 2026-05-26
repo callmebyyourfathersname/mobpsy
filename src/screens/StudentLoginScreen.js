@@ -8,7 +8,6 @@ import { Colors } from '../theme/colors';
 import { supabase } from '../utils/supabase';
 import { useProfileStore, useProgressStore } from '../store/store';
 
-// Default emoji if student has no profile_icon set
 const DEFAULT_ICON = '🧒';
 
 // ── PIN Pad ──────────────────────────────────────────────────────────────────
@@ -64,50 +63,41 @@ const pad = StyleSheet.create({
 
 // ── Main Screen ──────────────────────────────────────────────────────────────
 export default function StudentLoginScreen({ navigation }) {
-  const [step, setStep]                   = useState('pick');
-  const [students, setStudents]           = useState([]);
+  const [step, setStep]                       = useState('pick');
+  const [students, setStudents]               = useState([]);
   const [loadingStudents, setLoadingStudents] = useState(true);
-  const [fetchError, setFetchError]       = useState(null);
+  const [fetchError, setFetchError]           = useState(null);
   const [selectedStudent, setSelectedStudent] = useState(null);
-  const [pin, setPin]                     = useState('');
-  const [verifying, setVerifying]         = useState(false);
-  const [pinError, setPinError]           = useState('');
+  const [pin, setPin]                         = useState('');
+  const [verifying, setVerifying]             = useState(false);
+  const [pinError, setPinError]               = useState('');
 
   const setActiveProfile = useProfileStore(s => s.setActiveProfile);
   const loadProgress     = useProgressStore(s => s.loadProgress);
   const startSession     = useProgressStore(s => s.startSession);
 
-  // ── Fetch all students from Supabase ──────────────────────────────────────
-  useEffect(() => {
-    fetchStudents();
-  }, []);
+  useEffect(() => { fetchStudents(); }, []);
 
   const fetchStudents = async () => {
     setLoadingStudents(true);
     setFetchError(null);
     try {
-      console.log('📡 Fetching students from Supabase...');
       const { data, error } = await supabase
         .from('students')
         .select('id, name, profile_icon, class_list_id');
 
       if (error) {
-        console.error('❌ Fetch error:', JSON.stringify(error));
         setFetchError('Could not load students: ' + error.message);
         setLoadingStudents(false);
         return;
       }
-
-      console.log('✅ Students fetched:', JSON.stringify(data));
       setStudents(data ?? []);
     } catch (e) {
-      console.error('❌ Unexpected error:', e.message);
       setFetchError('Unexpected error: ' + e.message);
     }
     setLoadingStudents(false);
   };
 
-  // ── Auto-verify when 6 digits entered ────────────────────────────────────
   useEffect(() => {
     if (pin.length === 6) verifyPin(pin);
   }, [pin]);
@@ -119,13 +109,10 @@ export default function StudentLoginScreen({ navigation }) {
     setStep('pin');
   };
 
-  // ── Verify classroom PIN against DB ──────────────────────────────────────
   const verifyPin = async (enteredPin) => {
     setVerifying(true);
     setPinError('');
     try {
-      console.log('🔑 Verifying PIN for class_list_id:', selectedStudent.class_list_id);
-
       const { data: classList, error } = await supabase
         .from('class_lists')
         .select('id, class_name, unified_classroom_pin')
@@ -133,25 +120,19 @@ export default function StudentLoginScreen({ navigation }) {
         .single();
 
       if (error || !classList) {
-        console.error('❌ Class fetch error:', JSON.stringify(error));
         setPinError('Could not find classroom. Try again.');
         setPin('');
         setVerifying(false);
         return;
       }
 
-      console.log('🏫 Class found:', classList.class_name, '| PIN in DB:', classList.unified_classroom_pin);
-
       if (enteredPin !== classList.unified_classroom_pin) {
-        console.warn('❌ PIN mismatch. Entered:', enteredPin, '| Expected:', classList.unified_classroom_pin);
         setPinError('Wrong PIN. Please try again.');
         setPin('');
         setVerifying(false);
         return;
       }
 
-      // ✅ PIN correct
-      console.log('✅ PIN correct! Logging in as:', selectedStudent.name);
       const profile = {
         id: String(selectedStudent.id),
         name: selectedStudent.name,
@@ -167,24 +148,22 @@ export default function StudentLoginScreen({ navigation }) {
       navigation.replace('StudentArea');
 
     } catch (e) {
-      console.error('❌ Verify error:', e.message);
       setPinError('Something went wrong. Try again.');
       setPin('');
     }
     setVerifying(false);
   };
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 1 — Pick student
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── STEP 1 — Pick student ─────────────────────────────────────────────────
   if (step === 'pick') {
     return (
       <LinearGradient colors={['#FFF8F0', '#EAF6FF']} style={{ flex: 1 }}>
-        <SafeAreaView style={styles.container}>
-
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>← Back</Text>
-          </TouchableOpacity>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.topBar}>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              <Text style={styles.backText}>← Back</Text>
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.headerArea}>
             <View style={styles.iconWrap}>
@@ -254,24 +233,25 @@ export default function StudentLoginScreen({ navigation }) {
               )}
             />
           )}
-
         </SafeAreaView>
       </LinearGradient>
     );
   }
 
-  // ─────────────────────────────────────────────────────────────────────────
-  // STEP 2 — Enter classroom PIN
-  // ─────────────────────────────────────────────────────────────────────────
+  // ── STEP 2 — Enter classroom PIN ──────────────────────────────────────────
   return (
     <LinearGradient colors={['#FFF8F0', '#EAF6FF']} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => { setStep('pick'); setPin(''); setPinError(''); }}
+            style={styles.backBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
 
-        <TouchableOpacity onPress={() => { setStep('pick'); setPin(''); setPinError(''); }} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
-
-        {/* Selected student preview */}
         <View style={styles.selectedPreview}>
           <View style={styles.selectedIconCircle}>
             <Text style={{ fontSize: 44 }}>
@@ -313,8 +293,17 @@ export default function StudentLoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 24, paddingTop: 12 },
-  backBtn: { marginBottom: 4 },
+  safeArea: { flex: 1, paddingHorizontal: 24 },
+  topBar: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    minHeight: 52,
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
   backText: { fontSize: 16, color: Colors.primary, fontWeight: '700' },
 
   // Step 1

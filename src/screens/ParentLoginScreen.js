@@ -10,6 +10,49 @@ import { useProfileStore, useProgressStore } from '../store/store';
 
 const DEFAULT_ICON = '🧒';
 
+// Simple text-based eye icon component — no emoji, no external library
+function EyeIcon({ visible }) {
+  return visible ? (
+    // "eye open" — circle with pupil
+    <View style={eye.wrap}>
+      <View style={eye.oval}>
+        <View style={eye.pupil} />
+      </View>
+    </View>
+  ) : (
+    // "eye closed" — arc with slash
+    <View style={eye.wrap}>
+      <View style={eye.ovalClosed} />
+      <View style={eye.slash} />
+    </View>
+  );
+}
+
+const eye = StyleSheet.create({
+  wrap: { width: 24, height: 24, alignItems: 'center', justifyContent: 'center' },
+  oval: {
+    width: 20, height: 13, borderRadius: 10,
+    borderWidth: 2, borderColor: Colors.textSecondary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  pupil: {
+    width: 6, height: 6, borderRadius: 3,
+    backgroundColor: Colors.textSecondary,
+  },
+  ovalClosed: {
+    position: 'absolute',
+    width: 20, height: 13, borderRadius: 10,
+    borderWidth: 2, borderColor: Colors.textSecondary,
+  },
+  slash: {
+    position: 'absolute',
+    width: 2, height: 22,
+    backgroundColor: Colors.textSecondary,
+    borderRadius: 1,
+    transform: [{ rotate: '45deg' }],
+  },
+});
+
 export default function ParentLoginScreen({ navigation }) {
   const [email, setEmail]               = useState('');
   const [password, setPassword]         = useState('');
@@ -22,20 +65,17 @@ export default function ParentLoginScreen({ navigation }) {
 
   const handleLogin = async () => {
     if (!email.trim())    return Alert.alert('Email required', 'Please enter your email.');
-    if (!password.trim()) return Alert.alert('Password required', 'Please enter the password.');
+    if (!password.trim()) return Alert.alert('Password required', 'Please enter your password.');
 
     setLoading(true);
     try {
       const cleanEmail = email.trim().toLowerCase();
-      console.log('📡 Looking up user with email:', cleanEmail);
 
-      // Step 1: Find user by email
+      // Step 1: Find user by email + password
       const { data: users, error: userError } = await supabase
         .from('users')
-        .select('id, role')
+        .select('id, role, password')
         .eq('email', cleanEmail);
-
-      console.log('👤 Users result:', JSON.stringify(users), 'Error:', JSON.stringify(userError));
 
       if (userError) {
         Alert.alert('Error', 'Database error: ' + userError.message);
@@ -50,10 +90,16 @@ export default function ParentLoginScreen({ navigation }) {
       }
 
       const user = users[0];
-      console.log('✅ User found:', JSON.stringify(user));
 
       if (user.role !== 'parent') {
         Alert.alert('Wrong Account', 'This email is not registered as a parent.');
+        setLoading(false);
+        return;
+      }
+
+      // Verify parent's own password
+      if (user.password !== password.trim()) {
+        Alert.alert('Wrong Password', 'The password is incorrect.');
         setLoading(false);
         return;
       }
@@ -64,8 +110,6 @@ export default function ParentLoginScreen({ navigation }) {
         .select('id, name')
         .eq('user_id', user.id);
 
-      console.log('👨‍👩‍👧 Parents result:', JSON.stringify(parents), 'Error:', JSON.stringify(parentError));
-
       if (parentError || !parents || parents.length === 0) {
         Alert.alert('Error', 'Parent record not found. Contact your teacher.');
         setLoading(false);
@@ -73,34 +117,22 @@ export default function ParentLoginScreen({ navigation }) {
       }
 
       const parent = parents[0];
-      console.log('✅ Parent found:', JSON.stringify(parent));
 
-      // Step 3: Find student matching parent_id AND parent_password
-      const { data: studentsByParent, error: studentsError } = await supabase
+      // Step 3: Find linked students
+      const { data: studentList, error: studentsError } = await supabase
         .from('students')
-        .select('id, name, profile_icon, class_list_id, parent_password')
+        .select('id, name, profile_icon, class_list_id')
         .eq('parent_id', parent.id);
 
-      console.log('🎒 Students for parent:', JSON.stringify(studentsByParent), 'Error:', JSON.stringify(studentsError));
-
-      if (studentsError || !studentsByParent || studentsByParent.length === 0) {
+      if (studentsError || !studentList || studentList.length === 0) {
         Alert.alert('No Students', 'No students are linked to this parent account.');
         setLoading(false);
         return;
       }
 
-      // Match password
-      const student = studentsByParent.find(s => s.parent_password === password.trim());
-      console.log('🔑 Password match:', student ? student.name : 'none');
+      // Use the first student for progress loading; full list passed to dashboard
+      const student = studentList[0];
 
-      if (!student) {
-        Alert.alert('Wrong Password', 'The password is incorrect. Ask your teacher if you forgot it.');
-        setLoading(false);
-        return;
-      }
-
-      // Step 4: Login as that student
-      console.log('✅ Logging in as student:', student.name);
       const profile = {
         id: String(student.id),
         name: student.name,
@@ -108,16 +140,22 @@ export default function ParentLoginScreen({ navigation }) {
           ? student.profile_icon
           : DEFAULT_ICON,
         iconColor: Colors.secondary,
+        parentId: String(parent.id),
         parentName: parent.name,
+        isParent: true,
+        studentList: studentList.map(s => ({
+          id: String(s.id),
+          name: s.name,
+          iconEmoji: s.profile_icon && s.profile_icon.trim() !== '' ? s.profile_icon : DEFAULT_ICON,
+        })),
       };
 
       setActiveProfile(profile);
       await loadProgress(String(student.id));
       await startSession();
-      navigation.replace('StudentArea');
+      navigation.replace('ParentArea');
 
     } catch (e) {
-      console.error('❌ Login error:', e.message);
       Alert.alert('Error', 'Something went wrong: ' + e.message);
     }
     setLoading(false);
@@ -125,18 +163,24 @@ export default function ParentLoginScreen({ navigation }) {
 
   return (
     <LinearGradient colors={['#FFF8F0', '#FFF0E0']} style={{ flex: 1 }}>
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.safeArea}>
 
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Text style={styles.backText}>← Back</Text>
-        </TouchableOpacity>
+        <View style={styles.topBar}>
+          <TouchableOpacity
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Text style={styles.backText}>← Back</Text>
+          </TouchableOpacity>
+        </View>
 
         <View style={styles.headerArea}>
           <View style={styles.iconWrap}>
             <Text style={{ fontSize: 32 }}>👨‍👩‍👧</Text>
           </View>
           <Text style={styles.title}>Parent Login</Text>
-          <Text style={styles.subtitle}>Sign in to access your child's account</Text>
+          <Text style={styles.subtitle}>Sign in to monitor your child's progress</Text>
         </View>
 
         {/* Email */}
@@ -156,11 +200,11 @@ export default function ParentLoginScreen({ navigation }) {
 
         {/* Password */}
         <View style={styles.fieldWrap}>
-          <Text style={styles.label}>Child's Password</Text>
+          <Text style={styles.label}>Your Password</Text>
           <View style={styles.passwordRow}>
             <TextInput
               style={[styles.input, { flex: 1 }]}
-              placeholder="e.g. pass1234"
+              placeholder="Enter your password"
               placeholderTextColor={Colors.textSecondary}
               value={password}
               onChangeText={setPassword}
@@ -171,8 +215,9 @@ export default function ParentLoginScreen({ navigation }) {
             <TouchableOpacity
               onPress={() => setShowPassword(v => !v)}
               style={styles.eyeBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Text style={{ fontSize: 18 }}>{showPassword ? '🙈' : '👁️'}</Text>
+              <EyeIcon visible={showPassword} />
             </TouchableOpacity>
           </View>
         </View>
@@ -196,7 +241,7 @@ export default function ParentLoginScreen({ navigation }) {
         <View style={styles.hintBox}>
           <Text style={styles.hintTitle}>How to log in:</Text>
           <Text style={styles.hintText}>• Email: your registered parent email</Text>
-          <Text style={styles.hintText}>• Password: your child's account password</Text>
+          <Text style={styles.hintText}>• Password: your own account password</Text>
           <Text style={styles.hintText}>• Contact your teacher if you need help</Text>
         </View>
 
@@ -206,8 +251,17 @@ export default function ParentLoginScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingHorizontal: 28, paddingTop: 12 },
-  backBtn: { marginBottom: 8 },
+  safeArea: { flex: 1, paddingHorizontal: 28 },
+  topBar: {
+    paddingTop: 16,
+    paddingBottom: 8,
+    minHeight: 52,
+  },
+  backBtn: {
+    alignSelf: 'flex-start',
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
   backText: { fontSize: 16, color: Colors.secondary, fontWeight: '700' },
   headerArea: { alignItems: 'center', marginBottom: 28 },
   iconWrap: {
@@ -228,7 +282,9 @@ const styles = StyleSheet.create({
   passwordRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   eyeBtn: {
     backgroundColor: '#fff', borderRadius: 14,
-    borderWidth: 2, borderColor: Colors.divider, padding: 14,
+    borderWidth: 2, borderColor: Colors.divider,
+    padding: 14, alignItems: 'center', justifyContent: 'center',
+    width: 52, height: 52,
   },
   loginBtn: { borderRadius: 16, paddingVertical: 16, alignItems: 'center' },
   loginBtnText: { color: '#fff', fontSize: 17, fontWeight: '800' },
