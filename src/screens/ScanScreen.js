@@ -14,7 +14,15 @@ import LensFrame from '../components/LensFrame';
 import HudBracket from '../components/HudBracket';
 
 // ── Claude Vision ─────────────────────────────────────────────────────────────
+// Replace this value with your Anthropic API key.
+// Get one at https://console.anthropic.com/settings/keys
+const ANTHROPIC_API_KEY = 'YOUR_ANTHROPIC_API_KEY_HERE';
+
 async function identifyImageWithClaude(base64Image) {
+  if (!ANTHROPIC_API_KEY || ANTHROPIC_API_KEY === 'YOUR_ANTHROPIC_API_KEY_HERE') {
+    throw new Error('Add your Anthropic API key to ScanScreen.js (ANTHROPIC_API_KEY constant).');
+  }
+
   const wordList = allWords
     .map(w => w.id + ': ' + w.englishName + ' (' + w.filipinoName + ') — ' + w.category)
     .join('\n');
@@ -30,7 +38,11 @@ async function identifyImageWithClaude(base64Image) {
 
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': ANTHROPIC_API_KEY,
+      'anthropic-version': '2023-06-01',
+    },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 20,
@@ -51,7 +63,7 @@ async function identifyImageWithClaude(base64Image) {
 
   if (!response.ok) {
     const err = await response.text();
-    throw new Error('Claude API error: ' + err);
+    throw new Error('Claude API ' + response.status + ': ' + err);
   }
 
   const data = await response.json();
